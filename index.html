@@ -152,6 +152,8 @@
         // --- KONFIGURÁCIA ---
         const DEV_PASSWORD = "1234"; 
         const JSONBIN_API_KEY = "$2a$10$xxsGTTRIxu44LAHbyjrkDu7zK7We7833GxcorasZRhmCf8ts6a.Iq";
+        const BIN_PRODUCTS_ID = "6abfd8e5ac6210605a0d039f";
+        const BIN_ORDERS_ID = "6abfd906ffd5d1605346a897";
 
         let isAdminUnlocked = false;
 
@@ -160,43 +162,19 @@
             if (spinner) spinner.classList.toggle('hidden', !show);
         }
 
-        // --- ZÍSKANIE ALEBO VYTVORENIE CLOUD BIN-OV ---
-        async function getBinId(type) {
-            let binId = localStorage.getItem(`bin_${type}_id`);
-            if (binId) return binId;
-
-            // Ak bin v cloude ešte neexistuje, automaticky ho vytvoríme
-            try {
-                const res = await fetch('https://api.jsonbin.io/v3/b', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-Master-Key': JSONBIN_API_KEY,
-                        'X-Bin-Name': `eshop_${type}`
-                    },
-                    body: JSON.stringify([])
-                });
-                const data = await res.json();
-                binId = data.metadata.id;
-                localStorage.setItem(`bin_${type}_id`, binId);
-                return binId;
-            } catch (e) {
-                console.error(`Chyba pri vytváraní cloudu pre ${type}:`, e);
-                return null;
-            }
-        }
-
         // --- CLOUD STORAGE FUNKCIE (JSONBin) ---
         async function getProducts() {
             showLoading(true);
             try {
-                const binId = await getBinId('products');
-                if (!binId) return [];
-                const res = await fetch(`https://api.jsonbin.io/v3/b/${binId}/latest`, {
+                const res = await fetch(`https://api.jsonbin.io/v3/b/${BIN_PRODUCTS_ID}/latest`, {
                     headers: { 'X-Master-Key': JSONBIN_API_KEY }
                 });
+                if (!res.ok) return [];
                 const data = await res.json();
-                return data.record || [];
+                const record = data.record;
+                if (Array.isArray(record)) return record;
+                if (record && Array.isArray(record.items)) return record.items;
+                return [];
             } catch (e) {
                 console.error("Chyba pri načítaní produktov:", e);
                 return [];
@@ -208,14 +186,13 @@
         async function saveProducts(products) {
             showLoading(true);
             try {
-                const binId = await getBinId('products');
-                await fetch(`https://api.jsonbin.io/v3/b/${binId}`, {
+                await fetch(`https://api.jsonbin.io/v3/b/${BIN_PRODUCTS_ID}`, {
                     method: 'PUT',
                     headers: {
                         'Content-Type': 'application/json',
                         'X-Master-Key': JSONBIN_API_KEY
                     },
-                    body: JSON.stringify(products)
+                    body: JSON.stringify({ items: products })
                 });
             } catch (e) {
                 console.error("Chyba pri ukladaní produktov:", e);
@@ -227,13 +204,15 @@
         async function getOrders() {
             showLoading(true);
             try {
-                const binId = await getBinId('orders');
-                if (!binId) return [];
-                const res = await fetch(`https://api.jsonbin.io/v3/b/${binId}/latest`, {
+                const res = await fetch(`https://api.jsonbin.io/v3/b/${BIN_ORDERS_ID}/latest`, {
                     headers: { 'X-Master-Key': JSONBIN_API_KEY }
                 });
+                if (!res.ok) return [];
                 const data = await res.json();
-                return data.record || [];
+                const record = data.record;
+                if (Array.isArray(record)) return record;
+                if (record && Array.isArray(record.items)) return record.items;
+                return [];
             } catch (e) {
                 console.error("Chyba pri načítaní objednávok:", e);
                 return [];
@@ -245,14 +224,13 @@
         async function saveOrders(orders) {
             showLoading(true);
             try {
-                const binId = await getBinId('orders');
-                await fetch(`https://api.jsonbin.io/v3/b/${binId}`, {
+                await fetch(`https://api.jsonbin.io/v3/b/${BIN_ORDERS_ID}`, {
                     method: 'PUT',
                     headers: {
                         'Content-Type': 'application/json',
                         'X-Master-Key': JSONBIN_API_KEY
                     },
-                    body: JSON.stringify(orders)
+                    body: JSON.stringify({ items: orders })
                 });
             } catch (e) {
                 console.error("Chyba pri ukladaní objednávok:", e);
