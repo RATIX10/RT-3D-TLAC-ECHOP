@@ -1,6 +1,5 @@
 const express = require('express');
 const http = require('http');
-const path = require('path'); // 1. PRIDANÝ MODUL
 const { Server } = require('socket.io');
 
 const app = express();
@@ -9,11 +8,6 @@ const io = new Server(server);
 
 app.use(express.json());
 app.use(express.static('public'));
-
-// 2. PRIDANÉ SMEROVANIE PRE PREMENOVANÝ SÚBOR
-app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'public-index.html'));
-});
 
 let stock = 1; // Napríklad už zostáva len 1 kus!
 
