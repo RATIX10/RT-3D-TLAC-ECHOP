@@ -91,6 +91,10 @@
                             <input type="text" id="p-title" required class="w-full bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 p-2 rounded mt-1 text-gray-900 dark:text-white focus:outline-none focus:border-indigo-500">
                         </div>
                         <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">URL Obrázka (Voliteľné)</label>
+                            <input type="url" id="p-image" placeholder="https://priklad.sk/obrazok.jpg" class="w-full bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 p-2 rounded mt-1 text-gray-900 dark:text-white focus:outline-none focus:border-indigo-500">
+                        </div>
+                        <div>
                             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Cena (€)</label>
                             <input type="number" step="0.01" id="p-price" required class="w-full bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 p-2 rounded mt-1 text-gray-900 dark:text-white focus:outline-none focus:border-indigo-500">
                         </div>
@@ -166,6 +170,7 @@
                     <table class="w-full text-left border-collapse">
                         <thead>
                             <tr class="bg-gray-100 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300">
+                                <th class="p-3">Obrázok</th>
                                 <th class="p-3">Názov</th>
                                 <th class="p-3">Cena</th>
                                 <th class="p-3">Typ</th>
@@ -184,10 +189,11 @@
 
     <script>
         // --- KONFIGURÁCIA ---
-        const DEV_PASSWORD = "5332452"; 
+        const DEV_PASSWORD = "1234"; 
         const JSONBIN_API_KEY = "$2a$10$xxsGTTRIxu44LAHbyjrkDu7zK7We7833GxcorasZRhmCf8ts6a.Iq";
         const BIN_PRODUCTS_ID = "6abfd8e5ac6210605a0d039f";
         const BIN_ORDERS_ID = "6abfd906ffd5d1605346a897";
+        const DEFAULT_IMAGE = "https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?w=500&auto=format&fit=crop&q=60";
 
         let isAdminUnlocked = false;
 
@@ -412,20 +418,28 @@
             }
 
             availableProducts.forEach(p => {
+                const imageUrl = p.imageUrl || DEFAULT_IMAGE;
                 const card = document.createElement('div');
-                card.className = 'bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 p-5 rounded-lg shadow flex flex-col justify-between transition-colors';
+                card.className = 'bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg shadow overflow-hidden flex flex-col justify-between transition-colors';
                 card.innerHTML = `
                     <div>
-                        <div class="flex justify-between items-start">
-                            <h3 class="text-lg font-bold text-gray-900 dark:text-white">${p.title}</h3>
-                            <span class="bg-indigo-100 dark:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 text-xs px-2 py-1 rounded font-bold border border-indigo-300 dark:border-indigo-700">Na sklade: ${p.stock} ks</span>
+                        <div class="h-48 w-full overflow-hidden bg-gray-200 dark:bg-gray-800">
+                            <img src="${imageUrl}" alt="${p.title}" class="w-full h-full object-cover" onerror="this.src='${DEFAULT_IMAGE}'">
                         </div>
-                        <p class="text-2xl font-extrabold text-indigo-600 dark:text-indigo-400 my-2">${p.price.toFixed(2)} €</p>
-                        <span class="inline-block px-2 py-1 text-xs rounded font-medium ${p.type === 'monthly' ? 'bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-800' : 'bg-gray-200 dark:bg-gray-800 text-gray-700 dark:text-gray-300'}">
-                            ${p.type === 'monthly' ? `Predplatné (Restock ${p.restockStock || 3}ks každých ${p.restockDays || 7} dní)` : 'Jednorazový nákup'}
-                        </span>
+                        <div class="p-5">
+                            <div class="flex justify-between items-start">
+                                <h3 class="text-lg font-bold text-gray-900 dark:text-white">${p.title}</h3>
+                                <span class="bg-indigo-100 dark:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 text-xs px-2 py-1 rounded font-bold border border-indigo-300 dark:border-indigo-700">Na sklade: ${p.stock} ks</span>
+                            </div>
+                            <p class="text-2xl font-extrabold text-indigo-600 dark:text-indigo-400 my-2">${p.price.toFixed(2)} €</p>
+                            <span class="inline-block px-2 py-1 text-xs rounded font-medium ${p.type === 'monthly' ? 'bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-800' : 'bg-gray-200 dark:bg-gray-800 text-gray-700 dark:text-gray-300'}">
+                                ${p.type === 'monthly' ? `Predplatné (Restock ${p.restockStock || 3}ks každých ${p.restockDays || 7} dní)` : 'Jednorazový nákup'}
+                            </span>
+                        </div>
                     </div>
-                    <button onclick="buyProduct('${p.id}')" class="mt-4 w-full bg-indigo-600 text-white py-2 rounded hover:bg-indigo-700 font-bold transition-colors">Kúpiť / Rezervovať</button>
+                    <div class="p-5 pt-0">
+                        <button onclick="buyProduct('${p.id}')" class="w-full bg-indigo-600 text-white py-2 rounded hover:bg-indigo-700 font-bold transition-colors">Kúpiť / Rezervovať</button>
+                    </div>
                 `;
                 container.appendChild(card);
             });
@@ -506,6 +520,7 @@
             btn.innerText = "Ukladám...";
 
             const title = document.getElementById('p-title').value;
+            const imageUrl = document.getElementById('p-image').value.trim();
             const price = parseFloat(document.getElementById('p-price').value);
             const type = document.getElementById('p-type').value;
 
@@ -524,6 +539,7 @@
             const newProduct = { 
                 id: 'prod_' + Date.now(), 
                 title, 
+                imageUrl: imageUrl || DEFAULT_IMAGE,
                 price, 
                 type, 
                 stock,
@@ -576,9 +592,10 @@
             tbodyProducts.innerHTML = '';
 
             if (products.length === 0) {
-                tbodyProducts.innerHTML = `<tr><td colspan="6" class="p-4 text-center text-gray-500 dark:text-gray-400">Žiadne vytvorené produkty.</td></tr>`;
+                tbodyProducts.innerHTML = `<tr><td colspan="7" class="p-4 text-center text-gray-500 dark:text-gray-400">Žiadne vytvorené produkty.</td></tr>`;
             } else {
                 products.forEach(p => {
+                    const imageUrl = p.imageUrl || DEFAULT_IMAGE;
                     const tr = document.createElement('tr');
                     tr.className = 'hover:bg-gray-50 dark:hover:bg-gray-800/50';
                     
@@ -590,6 +607,9 @@
                     }
 
                     tr.innerHTML = `
+                        <td class="p-3">
+                            <img src="${imageUrl}" alt="${p.title}" class="w-12 h-12 object-cover rounded border border-gray-200 dark:border-gray-700" onerror="this.src='${DEFAULT_IMAGE}'">
+                        </td>
                         <td class="p-3 font-semibold text-gray-900 dark:text-white">${p.title}</td>
                         <td class="p-3 text-gray-700 dark:text-gray-300">${p.price.toFixed(2)} €</td>
                         <td class="p-3 text-sm text-gray-500 dark:text-gray-400">${p.type === 'monthly' ? `Mesačné (${p.restockDays}d restock)` : 'Jednorazovo'}</td>
