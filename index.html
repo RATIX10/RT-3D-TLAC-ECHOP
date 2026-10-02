@@ -15,8 +15,8 @@
     <nav class="bg-indigo-600 text-white p-4 shadow-md flex justify-between items-center">
         <h1 class="text-xl font-bold">Obchod s Kódmi</h1>
         <div>
-            <button onclick="switchTab('shop')" class="px-4 py-2 rounded bg-indigo-700 hover:bg-indigo-800 mr-2">Obchod</button>
-            <button onclick="switchTab('admin')" class="px-4 py-2 rounded bg-red-600 hover:bg-red-700 font-semibold">Developer Mode</button>
+            <button onclick="switchTab('shop')" class="px-4 py-2 rounded bg-indigo-700 hover:bg-indigo-800 mr-2 font-semibold">Obchod</button>
+            <button onclick="openPasswordModal()" class="px-4 py-2 rounded bg-red-600 hover:bg-red-700 font-semibold">Developer Mode 🔒</button>
         </div>
     </nav>
 
@@ -28,7 +28,7 @@
             <div id="product-list" class="grid grid-cols-1 md:grid-cols-3 gap-6"></div>
 
             <!-- Modal pre vygenerovaný QR Kód -->
-            <div id="qr-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4">
+            <div id="qr-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-40">
                 <div class="bg-white p-6 rounded-lg shadow-xl max-w-sm w-full text-center">
                     <h3 class="text-xl font-bold mb-2">Tvoja Objednávka</h3>
                     <p class="text-sm text-gray-600 mb-4">Odfoť si alebo ulož tento QR kód a prines ho pri platbe.</p>
@@ -40,9 +40,30 @@
             </div>
         </div>
 
+        <!-- MODAL PRE OVERENIE HESLA -->
+        <div id="password-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+            <div class="bg-white p-6 rounded-lg shadow-xl max-w-sm w-full">
+                <h3 class="text-xl font-bold mb-2 text-center text-red-600">Developer Mode 🔒</h3>
+                <p class="text-sm text-gray-600 mb-4 text-center">Zadaj prístupový kód pre vstup do administrácie.</p>
+                <form onsubmit="handlePasswordSubmit(event)" class="space-y-4">
+                    <div>
+                        <input type="password" id="dev-password-input" placeholder="Zadaj heslo..." required class="w-full border p-2 rounded text-center text-lg font-mono">
+                    </div>
+                    <p id="password-error" class="text-red-500 text-xs font-semibold text-center hidden">❌ Nesprávne heslo!</p>
+                    <div class="flex gap-2">
+                        <button type="button" onclick="closePasswordModal()" class="w-1/2 bg-gray-300 text-gray-800 py-2 rounded font-semibold hover:bg-gray-400">Zrušiť</button>
+                        <button type="submit" class="w-1/2 bg-red-600 text-white py-2 rounded font-bold hover:bg-red-700">Vstúpiť</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
         <!-- SEKČIA: DEVELOPER MODE (ADMIN) -->
         <div id="admin-section" class="hidden">
-            <h2 class="text-2xl font-bold mb-6 text-red-600">Developer Mode</h2>
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-2xl font-bold text-red-600">Developer Mode (Administrácia)</h2>
+                <button onclick="lockAdmin()" class="bg-gray-200 text-gray-700 px-3 py-1 rounded text-sm hover:bg-gray-300 font-semibold">🔒 Zamknúť</button>
+            </div>
 
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
                 <!-- Formulár na pridanie produktu -->
@@ -105,6 +126,12 @@
     </div>
 
     <script>
+        // --- KONFIGURÁCIA HESLA ---
+        // Tu si môžeš zmeniť svoje heslo pre Developer Mode:
+        const DEV_PASSWORD = "1234"; 
+
+        let isAdminUnlocked = false;
+
         // --- POMOCNÉ FUNKCIE PRE ÚLOŽISKO (LOCALSTORAGE) ---
         const getProducts = () => JSON.parse(localStorage.getItem('eshop_products') || '[]');
         const saveProducts = (p) => localStorage.setItem('eshop_products', JSON.stringify(p));
@@ -112,7 +139,7 @@
         const getOrders = () => JSON.parse(localStorage.getItem('eshop_orders') || '[]');
         const saveOrders = (o) => localStorage.setItem('eshop_orders', JSON.stringify(o));
 
-        // --- ŠIFROVANIE (HMAC-SHA256 simulované cez Web Crypto API) ---
+        // --- ŠIFROVANIE (HMAC-SHA256 cez Web Crypto API) ---
         async function generateEncryptedCode(orderId, productTitle) {
             const secret = "MOJ_TAJNY_KLUC_123";
             const data = `${orderId}-${productTitle}-${Date.now()}`;
@@ -131,17 +158,55 @@
             return `ORD-${orderId}-${hashHex.toUpperCase()}`;
         }
 
-        // --- MANIPULÁCIA SO STRÁNKOU A TABMI ---
+        // --- MANIPULÁCIA SO STRÁNKOU A HESLOM ---
+        function openPasswordModal() {
+            if (isAdminUnlocked) {
+                switchTab('admin');
+            } else {
+                document.getElementById('password-error').classList.add('hidden');
+                document.getElementById('dev-password-input').value = '';
+                document.getElementById('password-modal').classList.remove('hidden');
+                document.getElementById('dev-password-input').focus();
+            }
+        }
+
+        function closePasswordModal() {
+            document.getElementById('password-modal').classList.add('hidden');
+        }
+
+        function handlePasswordSubmit(e) {
+            e.preventDefault();
+            const inputVal = document.getElementById('dev-password-input').value;
+
+            if (inputVal === DEV_PASSWORD) {
+                isAdminUnlocked = true;
+                closePasswordModal();
+                switchTab('admin');
+            } else {
+                document.getElementById('password-error').classList.remove('hidden');
+            }
+        }
+
+        function lockAdmin() {
+            isAdminUnlocked = false;
+            switchTab('shop');
+        }
+
         function switchTab(tab) {
+            if (tab === 'admin' && !isAdminUnlocked) {
+                openPasswordModal();
+                return;
+            }
+
             document.getElementById('shop-section').classList.toggle('hidden', tab !== 'shop');
             document.getElementById('admin-section').classList.toggle('hidden', tab !== 'admin');
             if (tab === 'shop') renderShop();
             if (tab === 'admin') renderAdmin();
         }
 
-        // --- VYSA DZANIE OBCHODU ---
+        // --- VYSÁDZANIE OBCHODU ---
         function renderShop() {
-            processSubscriptions(); // Kontrola a automatické obnovenie predplatného
+            processSubscriptions();
             const products = getProducts();
             const container = document.getElementById('product-list');
             container.innerHTML = '';
@@ -192,7 +257,6 @@
             orders.push(newOrder);
             saveOrders(orders);
 
-            // Zobrazenie Modal okna s QR kódom
             document.getElementById('order-code-display').innerText = code;
             const qrContainer = document.getElementById('qrcode');
             qrContainer.innerHTML = '';
@@ -263,7 +327,7 @@
 
             if (index !== -1) {
                 const found = orders[index];
-                orders.splice(index, 1); // Zmazanie z databázy
+                orders.splice(index, 1);
                 saveOrders(orders);
 
                 resultDiv.className = "text-sm font-semibold mt-2 text-green-600";
@@ -292,7 +356,6 @@
             orders.forEach(o => {
                 if (o.type === 'monthly' && o.nextBillingDate) {
                     const billingDate = new Date(o.nextBillingDate);
-                    // Ak prešiel mesiac, posunie sa billing date na ďalší mesiac
                     if (now >= billingDate) {
                         billingDate.setMonth(billingDate.getMonth() + 1);
                         o.nextBillingDate = billingDate.toISOString();
