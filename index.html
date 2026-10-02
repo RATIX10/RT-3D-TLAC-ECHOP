@@ -16,7 +16,7 @@
         <h1 class="text-xl font-bold text-white">Obchod s Kódmi</h1>
         <div class="flex items-center gap-2">
             <button onclick="switchTab('shop')" class="px-4 py-2 rounded bg-gray-800 hover:bg-gray-700 text-sm font-semibold text-white">Obchod</button>
-            <!-- Nenápadné malé tlačidlo pre Developer Mode -->
+            <!-- Developer Mode tlačidlo -->
             <button onclick="openPasswordModal()" title="Developer Mode" class="text-xs text-gray-600 hover:text-gray-400 p-1 rounded opacity-40 hover:opacity-100 transition-opacity">🔒</button>
         </div>
     </nav>
@@ -85,10 +85,15 @@
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-gray-300">Typ platby</label>
-                            <select id="p-type" class="w-full bg-gray-800 border border-gray-700 p-2 rounded mt-1 text-white focus:outline-none focus:border-indigo-500">
-                                <option value="once">Jednorazovo</option>
-                                <option value="monthly">Mesačné predplatné / prenájom (automaticky)</option>
+                            <select id="p-type" onchange="toggleRestockInput()" class="w-full bg-gray-800 border border-gray-700 p-2 rounded mt-1 text-white focus:outline-none focus:border-indigo-500">
+                                <option value="once">Jednorazovo (Skladom 1ks - po kúpe zmizne)</option>
+                                <option value="monthly">Mesačné predplatné / prenájom (automatický restock)</option>
                             </select>
+                        </div>
+                        <div id="restock-group">
+                            <label class="block text-sm font-medium text-gray-300">Automatický Restock (počet dní)</label>
+                            <input type="number" id="p-restock-days" min="1" value="7" placeholder="Napr. 7 pre 1x týždenne" class="w-full bg-gray-800 border border-gray-700 p-2 rounded mt-1 text-white focus:outline-none focus:border-indigo-500">
+                            <p class="text-xs text-gray-400 mt-1">Po zakúpení sa produkt opäť naskladní po ubehnutí vybraných dní (napr. 7 dní = 1x týždenne).</p>
                         </div>
                         <button type="submit" id="btn-add-product" class="w-full bg-indigo-600 text-white py-2 rounded font-bold hover:bg-indigo-700">Uložiť Produkt</button>
                     </form>
@@ -137,6 +142,7 @@
                                 <th class="p-3">Názov</th>
                                 <th class="p-3">Cena</th>
                                 <th class="p-3">Typ</th>
+                                <th class="p-3">Stav</th>
                                 <th class="p-3">Akcia</th>
                             </tr>
                         </thead>
@@ -239,7 +245,7 @@
             }
         }
 
-        // --- ŠIFROVANIE (HMAC-SHA256 cez Web Crypto API) ---
+        // --- ŠIFROVANIE (HMAC-SHA256) ---
         async function generateEncryptedCode(orderId, productTitle) {
             const secret = "MOJ_TAJNY_KLUC_123";
             const data = `${orderId}-${productTitle}-${Date.now()}`;
@@ -256,6 +262,11 @@
             const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('').substring(0, 16);
 
             return `ORD-${orderId}-${hashHex.toUpperCase()}`;
+        }
+
+        function toggleRestockInput() {
+            const type = document.getElementById('p-type').value;
+            document.getElementById('restock-group').style.display = type === 'monthly' ? 'block' : 'none';
         }
 
         // --- MANIPULÁCIA SO STRÁNKOU A HESLOM ---
@@ -304,19 +315,44 @@
             if (tab === 'admin') await renderAdmin();
         }
 
+        // --- AUTOMATICKÝ RESTOCK A FILTROVANIE ---
+        async function checkRestocks() {
+            let products = await getProducts();
+            let updated = false;
+            const now = new Date();
+
+            products.forEach(p => {
+                if (p.isSoldOut && p.nextRestockDate) {
+                    if (now >= new Date(p.nextRestockDate)) {
+                        p.isSoldOut = false;
+                        p.nextRestockDate = null;
+                        updated = true;
+                    }
+                }
+            });
+
+            if (updated) {
+                await saveProducts(products);
+            }
+            return products;
+        }
+
         // --- VYSÁDZANIE OBCHODU ---
         async function renderShop() {
             await processSubscriptions();
-            const products = await getProducts();
+            const products = await checkRestocks();
             const container = document.getElementById('product-list');
             container.innerHTML = '';
 
-            if (products.length === 0) {
-                container.innerHTML = `<p class="text-gray-500 col-span-3">Zatiaľ neboli pridané žiadne produkty.</p>`;
+            // Zobrazíme iba tie produkty, ktoré NIE SÚ vypredané
+            const availableProducts = products.filter(p => !p.isSoldOut);
+
+            if (availableProducts.length === 0) {
+                container.innerHTML = `<p class="text-gray-500 col-span-3">Momentálne nie sú dostupné žiadne produkty.</p>`;
                 return;
             }
 
-            products.forEach(p => {
+            availableProducts.forEach(p => {
                 const card = document.createElement('div');
                 card.className = 'bg-gray-900 border border-gray-800 p-5 rounded-lg shadow flex flex-col justify-between';
                 card.innerHTML = `
@@ -324,7 +360,7 @@
                         <h3 class="text-lg font-bold text-white">${p.title}</h3>
                         <p class="text-2xl font-extrabold text-indigo-400 my-2">${p.price.toFixed(2)} €</p>
                         <span class="inline-block px-2 py-1 text-xs rounded font-medium ${p.type === 'monthly' ? 'bg-amber-900/40 text-amber-300 border border-amber-800' : 'bg-gray-800 text-gray-300'}">
-                            ${p.type === 'monthly' ? 'Mesačný prenájom' : 'Jednorazový nákup'}
+                            ${p.type === 'monthly' ? `Predplatné (Restock každých ${p.restockDays || 7} dní)` : 'Jednorazový nákup (1ks)'}
                         </span>
                     </div>
                     <button onclick="buyProduct('${p.id}')" class="mt-4 w-full bg-indigo-600 text-white py-2 rounded hover:bg-indigo-700 font-bold transition-colors">Kúpiť / Rezervovať</button>
@@ -335,10 +371,13 @@
 
         // --- NÁKUP PRODUKTU A GENEREOVANIE QR KÓDU ---
         async function buyProduct(productId) {
-            const products = await getProducts();
-            const product = products.find(p => p.id === productId);
-            if (!product) return;
+            let products = await getProducts();
+            const productIndex = products.findIndex(p => p.id === productId);
+            if (productIndex === -1) return;
 
+            const product = products[productIndex];
+
+            // 1. Vytvorenie Objednávky
             const orderId = Math.floor(1000 + Math.random() * 9000);
             const code = await generateEncryptedCode(orderId, product.title);
 
@@ -357,6 +396,19 @@
             orders.push(newOrder);
             await saveOrders(orders);
 
+            // 2. Spracovanie produktu po kúpe (Zmazanie/Vypredanie)
+            if (product.type === 'once') {
+                // Jednorazový produkt sa po nákupe úplne zmaže
+                products.splice(productIndex, 1);
+            } else if (product.type === 'monthly') {
+                // Predplatný produkt sa na nastavený počet dní stane vyprodaným
+                const restockDays = product.restockDays || 7;
+                product.isSoldOut = true;
+                product.nextRestockDate = new Date(Date.now() + restockDays * 24 * 60 * 60 * 1000).toISOString();
+            }
+            await saveProducts(products);
+
+            // 3. Zobrazenie QR Kódu
             document.getElementById('order-code-display').innerText = code;
             const qrContainer = document.getElementById('qrcode');
             qrContainer.innerHTML = '';
@@ -367,6 +419,7 @@
             });
 
             document.getElementById('qr-modal').classList.remove('hidden');
+            await renderShop();
         }
 
         function closeModal() {
@@ -383,13 +436,24 @@
             const title = document.getElementById('p-title').value;
             const price = parseFloat(document.getElementById('p-price').value);
             const type = document.getElementById('p-type').value;
+            const restockDays = parseInt(document.getElementById('p-restock-days').value) || 7;
 
-            const newProduct = { id: 'prod_' + Date.now(), title, price, type };
+            const newProduct = { 
+                id: 'prod_' + Date.now(), 
+                title, 
+                price, 
+                type, 
+                restockDays: type === 'monthly' ? restockDays : null,
+                isSoldOut: false,
+                nextRestockDate: null
+            };
+
             const products = await getProducts();
             products.push(newProduct);
             await saveProducts(products);
 
             e.target.reset();
+            toggleRestockInput();
             btn.disabled = false;
             btn.innerText = "Uložiť Produkt";
 
@@ -428,15 +492,20 @@
             tbodyProducts.innerHTML = '';
 
             if (products.length === 0) {
-                tbodyProducts.innerHTML = `<tr><td colspan="4" class="p-4 text-center text-gray-500">Žiadne vytvorené produkty.</td></tr>`;
+                tbodyProducts.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-gray-500">Žiadne vytvorené produkty.</td></tr>`;
             } else {
                 products.forEach(p => {
                     const tr = document.createElement('tr');
                     tr.className = 'hover:bg-gray-800/50';
+                    const statusText = p.isSoldOut 
+                        ? `<span class="text-amber-400 text-xs">Vypredané (Restock: ${new Date(p.nextRestockDate).toLocaleDateString()})</span>` 
+                        : `<span class="text-green-400 text-xs">Dostupné v obchode</span>`;
+
                     tr.innerHTML = `
                         <td class="p-3 font-semibold text-white">${p.title}</td>
                         <td class="p-3 text-gray-300">${p.price.toFixed(2)} €</td>
-                        <td class="p-3 text-sm text-gray-400">${p.type === 'monthly' ? 'Mesačné' : 'Jednorazovo'}</td>
+                        <td class="p-3 text-sm text-gray-400">${p.type === 'monthly' ? `Mesačné (${p.restockDays}d restock)` : 'Jednorazovo'}</td>
+                        <td class="p-3">${statusText}</td>
                         <td class="p-3">
                             <button onclick="deleteProduct('${p.id}')" class="bg-red-800 text-white px-3 py-1 rounded text-xs hover:bg-red-700 font-semibold">Vymazať Produkt</button>
                         </td>
@@ -505,6 +574,7 @@
         }
 
         // Inicializácia pri prvom načítaní
+        toggleRestockInput();
         renderShop();
     </script>
 </body>
