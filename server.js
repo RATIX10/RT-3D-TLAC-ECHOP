@@ -1,63 +1,51 @@
-<!DOCTYPE html>
-<html lang="sk">
-<head>
-    <meta charset="UTF-8">
-    <title>Získať QR Kód</title>
-    <script src="/socket.io/socket.io.js"></script>
-    <style>
-        .disabled { opacity: 0.5; pointer-events: none; }
-    </style>
-</head>
-<body>
-    <h1>Získanie QR kódu</h1>
-    <p>Na sklade zostáva: <strong id="stock-count">...</strong> kusov</p>
+const express = require('express');
+const http = require('http');
+const path = require('path'); // 1. PRIDANÝ MODUL
+const { Server } = require('socket.io');
 
-    <button id="claim-btn" onclick="claimQR()">Získať QR Kód</button>
+const app = express();
+const server = http.createServer(app);
+const io = new Server(server);
 
-    <div id="result" style="margin-top: 20px;"></div>
+app.use(express.json());
+app.use(express.static('public'));
 
-    <script>
-        const socket = io();
+// 2. PRIDANÉ SMEROVANIE PRE PREMENOVANÝ SÚBOR
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'public-index.html'));
+});
 
-        // Načítanie stavu pri otborení stránky
-        async function loadStock() {
-            const res = await fetch('/api/stock');
-            const data = await res.json();
-            document.getElementById('stock-count').innerText = data.stock;
-            
-            if (data.stock <= 0) {
-                const btn = document.getElementById('claim-btn');
-                btn.disabled = true;
-                btn.innerText = "VYPREDANÉ";
-            }
-        }
-        loadStock();
+let stock = 1; // Napríklad už zostáva len 1 kus!
 
-        // Keď server pošle 'force_reload', stránka sa všetkým automaticky obnoví
-        socket.on('force_reload', () => {
-            console.log('Niekto si kúpil kus, obnovujem stránku...');
-            window.location.reload();
-        });
+// Získanie aktuálneho počtu kusov
+app.get('/api/stock', (req, res) => {
+    res.json({ stock });
+});
 
-        // Funkcia po kliknutí na tlačidlo
-        async function claimQR() {
-            const btn = document.getElementById('claim-btn');
-            btn.disabled = true; // Prevencia dvojitého kliknutia
-            btn.innerText = "Spracovávam...";
+// Endpoint pre získanie QR kódu / nákup
+app.post('/api/claim-qr', (req, res) => {
+    // ATÓMNA KONTROLA NA SERVERI
+    if (stock > 0) {
+        stock -= 1; // Okamžite odpočíta zo skladu, aby druhý požiadavok neprešiel
 
-            const res = await fetch('/api/claim-qr', { method: 'POST' });
-            const data = await res.json();
+        // Vygenerovanie unikátneho kódu pre tohto zákazníka
+        const qrCodeData = `QR-KOD-${Math.random().toString(36).substring(2, 9).toUpperCase()}`;
 
-            if (data.success) {
-                document.getElementById('result').innerHTML = `
-                    <h2 style="color: green;">Váš QR kód: ${data.qrCode}</h2>
-                    <p>Uložte si tento kód!</p>
-                `;
-            } else {
-                alert(data.message);
-                window.location.reload(); // Obnoví stránku pri neúspechu
-            }
-        }
-    </script>
-</body>
-</html>
+        // VŠETKÝM OSTATNÝM odošle príkaz na reload stránky
+        io.emit('force_reload');
+
+        // Odpoveď pre konkrétneho kupujúceho s jeho QR kódom
+        return res.json({ success: true, qrCode: qrCodeData, remainingStock: stock });
+    } else {
+        // Ak už niekto bol o milisekundu rýchlejší
+        return res.status(400).json({ success: false, message: 'Ľutujeme, posledný kus si práve niekto kúpil!' });
+    }
+});
+
+io.on('connection', (socket) => {
+    console.log('Klient pripojený');
+});
+
+server.listen(3000, () => {
+    console.log('Server beží na http://localhost:3000');
+});
