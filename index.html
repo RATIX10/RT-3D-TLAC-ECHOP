@@ -25,7 +25,11 @@
 
         <!-- SEKČIA: OBCHOD -->
         <div id="shop-section">
-            <h2 class="text-2xl font-bold mb-4 text-white">Dostupné produkty</h2>
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-2xl font-bold text-white">Dostupné produkty</h2>
+                <div id="loading-spinner" class="text-xs text-indigo-400 animate-pulse hidden">Načítavam z cloudu...</div>
+            </div>
+            
             <div id="product-list" class="grid grid-cols-1 md:grid-cols-3 gap-6"></div>
 
             <!-- Modal pre vygenerovaný QR Kód -->
@@ -86,7 +90,7 @@
                                 <option value="monthly">Mesačné predplatné / prenájom (automaticky)</option>
                             </select>
                         </div>
-                        <button type="submit" class="w-full bg-indigo-600 text-white py-2 rounded font-bold hover:bg-indigo-700">Uložiť Produkt</button>
+                        <button type="submit" id="btn-add-product" class="w-full bg-indigo-600 text-white py-2 rounded font-bold hover:bg-indigo-700">Uložiť Produkt</button>
                     </form>
                 </div>
 
@@ -145,24 +149,116 @@
     </div>
 
     <script>
-        // --- KONFIGURÁCIA HESLA ---
-        const DEV_PASSWORD = "1028373729"; 
+        // --- KONFIGURÁCIA ---
+        const DEV_PASSWORD = "1234"; 
+        const JSONBIN_API_KEY = "$2a$10$xxsGTTRIxu44LAHbyjrkDu7zK7We7833GxcorasZRhmCf8ts6a.Iq";
 
         let isAdminUnlocked = false;
 
-        // --- POMOCNÉ FUNKCIE PRE ÚLOŽISKO (LOCALSTORAGE) ---
-        function getProducts() {
-            return JSON.parse(localStorage.getItem('eshop_products') || '[]');
+        function showLoading(show) {
+            const spinner = document.getElementById('loading-spinner');
+            if (spinner) spinner.classList.toggle('hidden', !show);
         }
-        function saveProducts(p) {
-            localStorage.setItem('eshop_products', JSON.stringify(p));
+
+        // --- ZÍSKANIE ALEBO VYTVORENIE CLOUD BIN-OV ---
+        async function getBinId(type) {
+            let binId = localStorage.getItem(`bin_${type}_id`);
+            if (binId) return binId;
+
+            // Ak bin v cloude ešte neexistuje, automaticky ho vytvoríme
+            try {
+                const res = await fetch('https://api.jsonbin.io/v3/b', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Master-Key': JSONBIN_API_KEY,
+                        'X-Bin-Name': `eshop_${type}`
+                    },
+                    body: JSON.stringify([])
+                });
+                const data = await res.json();
+                binId = data.metadata.id;
+                localStorage.setItem(`bin_${type}_id`, binId);
+                return binId;
+            } catch (e) {
+                console.error(`Chyba pri vytváraní cloudu pre ${type}:`, e);
+                return null;
+            }
         }
-        
-        function getOrders() {
-            return JSON.parse(localStorage.getItem('eshop_orders') || '[]');
+
+        // --- CLOUD STORAGE FUNKCIE (JSONBin) ---
+        async function getProducts() {
+            showLoading(true);
+            try {
+                const binId = await getBinId('products');
+                if (!binId) return [];
+                const res = await fetch(`https://api.jsonbin.io/v3/b/${binId}/latest`, {
+                    headers: { 'X-Master-Key': JSONBIN_API_KEY }
+                });
+                const data = await res.json();
+                return data.record || [];
+            } catch (e) {
+                console.error("Chyba pri načítaní produktov:", e);
+                return [];
+            } finally {
+                showLoading(false);
+            }
         }
-        function saveOrders(o) {
-            localStorage.setItem('eshop_orders', JSON.stringify(o));
+
+        async function saveProducts(products) {
+            showLoading(true);
+            try {
+                const binId = await getBinId('products');
+                await fetch(`https://api.jsonbin.io/v3/b/${binId}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Master-Key': JSONBIN_API_KEY
+                    },
+                    body: JSON.stringify(products)
+                });
+            } catch (e) {
+                console.error("Chyba pri ukladaní produktov:", e);
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        async function getOrders() {
+            showLoading(true);
+            try {
+                const binId = await getBinId('orders');
+                if (!binId) return [];
+                const res = await fetch(`https://api.jsonbin.io/v3/b/${binId}/latest`, {
+                    headers: { 'X-Master-Key': JSONBIN_API_KEY }
+                });
+                const data = await res.json();
+                return data.record || [];
+            } catch (e) {
+                console.error("Chyba pri načítaní objednávok:", e);
+                return [];
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        async function saveOrders(orders) {
+            showLoading(true);
+            try {
+                const binId = await getBinId('orders');
+                await fetch(`https://api.jsonbin.io/v3/b/${binId}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Master-Key': JSONBIN_API_KEY
+                    },
+                    body: JSON.stringify(orders)
+                });
+            } catch (e) {
+                console.error("Chyba pri ukladaní objednávok:", e);
+            } finally {
+                showLoading(false);
+            }
         }
 
         // --- ŠIFROVANIE (HMAC-SHA256 cez Web Crypto API) ---
@@ -218,7 +314,7 @@
             switchTab('shop');
         }
 
-        function switchTab(tab) {
+        async function switchTab(tab) {
             if (tab === 'admin' && !isAdminUnlocked) {
                 openPasswordModal();
                 return;
@@ -226,14 +322,14 @@
 
             document.getElementById('shop-section').classList.toggle('hidden', tab !== 'shop');
             document.getElementById('admin-section').classList.toggle('hidden', tab !== 'admin');
-            if (tab === 'shop') renderShop();
-            if (tab === 'admin') renderAdmin();
+            if (tab === 'shop') await renderShop();
+            if (tab === 'admin') await renderAdmin();
         }
 
         // --- VYSÁDZANIE OBCHODU ---
-        function renderShop() {
-            processSubscriptions();
-            const products = getProducts();
+        async function renderShop() {
+            await processSubscriptions();
+            const products = await getProducts();
             const container = document.getElementById('product-list');
             container.innerHTML = '';
 
@@ -261,7 +357,7 @@
 
         // --- NÁKUP PRODUKTU A GENEREOVANIE QR KÓDU ---
         async function buyProduct(productId) {
-            const products = getProducts();
+            const products = await getProducts();
             const product = products.find(p => p.id === productId);
             if (!product) return;
 
@@ -279,9 +375,9 @@
                 nextBillingDate: product.type === 'monthly' ? new Date(Date.now() + 30*24*60*60*1000).toISOString() : null
             };
 
-            const orders = getOrders();
+            const orders = await getOrders();
             orders.push(newOrder);
-            saveOrders(orders);
+            await saveOrders(orders);
 
             document.getElementById('order-code-display').innerText = code;
             const qrContainer = document.getElementById('qrcode');
@@ -300,25 +396,32 @@
         }
 
         // --- DEVELOPER MODE / ADMIN FUNKCIONALITA ---
-        function handleCreateProduct(e) {
+        async function handleCreateProduct(e) {
             e.preventDefault();
+            const btn = document.getElementById('btn-add-product');
+            btn.disabled = true;
+            btn.innerText = "Ukladám...";
+
             const title = document.getElementById('p-title').value;
             const price = parseFloat(document.getElementById('p-price').value);
             const type = document.getElementById('p-type').value;
 
             const newProduct = { id: 'prod_' + Date.now(), title, price, type };
-            const products = getProducts();
+            const products = await getProducts();
             products.push(newProduct);
-            saveProducts(products);
+            await saveProducts(products);
 
             e.target.reset();
-            renderAdmin();
-            renderShop();
+            btn.disabled = false;
+            btn.innerText = "Uložiť Produkt";
+
+            await renderAdmin();
+            await renderShop();
         }
 
-        function renderAdmin() {
+        async function renderAdmin() {
             // Objednávky
-            const orders = getOrders();
+            const orders = await getOrders();
             const tbodyOrders = document.getElementById('orders-table-body');
             tbodyOrders.innerHTML = '';
 
@@ -342,7 +445,7 @@
             }
 
             // Produkty
-            const products = getProducts();
+            const products = await getProducts();
             const tbodyProducts = document.getElementById('products-table-body');
             tbodyProducts.innerHTML = '';
 
@@ -365,50 +468,47 @@
             }
         }
 
-        function handleVerifyCode() {
+        async function handleVerifyCode() {
             const inputCode = document.getElementById('verify-input').value.trim();
             const resultDiv = document.getElementById('verify-result');
             
             if (!inputCode) return;
 
-            let orders = getOrders();
+            let orders = await getOrders();
             const index = orders.findIndex(o => o.code === inputCode);
 
             if (index !== -1) {
                 const found = orders[index];
                 orders.splice(index, 1);
-                saveOrders(orders);
+                await saveOrders(orders);
 
                 resultDiv.className = "text-sm font-semibold mt-2 text-green-400";
                 resultDiv.innerText = `✅ Kód bol Platný! Objednávka pre "${found.title}" (${found.price} €) bola vymazaná.`;
                 document.getElementById('verify-input').value = '';
-                renderAdmin();
+                await renderAdmin();
             } else {
                 resultDiv.className = "text-sm font-semibold mt-2 text-red-400";
                 resultDiv.innerText = `❌ Neplatný alebo už vymazaný kód!`;
             }
         }
 
-        // Vymazanie objednávky / kódu z databázy
-        function deleteOrder(code) {
-            let orders = getOrders();
+        async function deleteOrder(code) {
+            let orders = await getOrders();
             orders = orders.filter(o => o.code !== code);
-            saveOrders(orders);
-            renderAdmin();
+            await saveOrders(orders);
+            await renderAdmin();
         }
 
-        // Vymazanie vytvoreného produktu z obchodného katalogu
-        function deleteProduct(productId) {
-            let products = getProducts();
+        async function deleteProduct(productId) {
+            let products = await getProducts();
             products = products.filter(p => p.id !== productId);
-            saveProducts(products);
-            renderAdmin();
-            renderShop();
+            await saveProducts(products);
+            await renderAdmin();
+            await renderShop();
         }
 
-        // --- AUTOMATICKÁ LOGIKA PRE PREDPATNÉ / PRENÁJOM ---
-        function processSubscriptions() {
-            const orders = getOrders();
+        async function processSubscriptions() {
+            const orders = await getOrders();
             const now = new Date();
             let updated = false;
 
@@ -423,7 +523,7 @@
                 }
             });
 
-            if (updated) saveOrders(orders);
+            if (updated) await saveOrders(orders);
         }
 
         // Inicializácia pri prvom načítaní
