@@ -43,15 +43,40 @@
             
             <div id="product-list" class="grid grid-cols-1 md:grid-cols-3 gap-6"></div>
 
-            <!-- Modal pre vygenerovaný QR Kód -->
-            <div id="qr-modal" class="hidden fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center p-4 z-40">
+            <!-- MODAL: Potvrdenie rezervácie & Meno zákazníka -->
+            <div id="confirm-modal" class="hidden fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center p-4 z-40">
+                <div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 p-6 rounded-lg shadow-xl max-w-sm w-full">
+                    <h3 class="text-xl font-bold mb-2 text-gray-900 dark:text-white text-center">Potvrdenie Rezervácie</h3>
+                    <p class="text-sm text-gray-600 dark:text-gray-400 mb-4 text-center">Naozaj si chceš zarezervovať produkt <strong id="confirm-product-title" class="text-indigo-600 dark:text-indigo-400"></strong>?</p>
+                    
+                    <form onsubmit="handleConfirmReservation(event)" class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Tvoje Meno a Priezvisko</label>
+                            <input type="text" id="customer-name-input" placeholder="Napr. Ján Novák" required class="w-full bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 p-2 rounded text-gray-900 dark:text-white focus:outline-none focus:border-indigo-500">
+                        </div>
+                        <div class="flex gap-2 pt-2">
+                            <button type="button" onclick="closeConfirmModal()" class="w-1/2 bg-gray-200 dark:bg-gray-800 text-gray-700 dark:text-gray-300 py-2 rounded font-semibold hover:bg-gray-300 dark:hover:bg-gray-700">Zrušiť</button>
+                            <button type="submit" id="btn-confirm-submit" class="w-1/2 bg-indigo-600 text-white py-2 rounded font-bold hover:bg-indigo-700">Potvrdiť</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- MODAL: Vygenerovaný QR Kód a Heslo -->
+            <div id="qr-modal" class="hidden fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center p-4 z-50">
                 <div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 p-6 rounded-lg shadow-xl max-w-sm w-full text-center">
-                    <h3 class="text-xl font-bold mb-2 text-gray-900 dark:text-white">Tvoja Objednávka</h3>
-                    <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">Odfoť si alebo ulož tento QR kód a prines ho pri platbe.</p>
+                    <div class="bg-amber-100 dark:bg-amber-900/40 border border-amber-300 dark:border-amber-700 text-amber-800 dark:text-amber-200 p-3 rounded mb-4 text-xs font-semibold">
+                        ⚠️ <strong>DÔLEŽITÉ:</strong> Tento QR kód a šifrovaný kód si dobre ulož alebo odfoť! Budeš ho potrebovať pri platbe/prebraní.
+                    </div>
+                    <h3 class="text-xl font-bold mb-1 text-gray-900 dark:text-white">Tvoja Rezervácia</h3>
+                    <p id="order-customer-display" class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3"></p>
+                    
                     <div id="qrcode" class="flex justify-center mb-4 p-3 bg-white rounded border border-gray-200"></div>
-                    <p class="text-xs text-gray-500 dark:text-gray-400 mb-2">Šifrovaný kód:</p>
+                    
+                    <p class="text-xs text-gray-500 dark:text-gray-400 mb-1">Tvoj Unikátny Šifrovaný Kód:</p>
                     <p id="order-code-display" class="font-mono text-sm bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 p-2 rounded break-all select-all font-bold text-indigo-600 dark:text-indigo-400 mb-4"></p>
-                    <button onclick="closeModal()" class="w-full bg-indigo-600 text-white py-2 rounded hover:bg-indigo-700 font-bold">Zatvoriť</button>
+                    
+                    <button onclick="closeModal()" class="w-full bg-indigo-600 text-white py-2 rounded hover:bg-indigo-700 font-bold">Mám uložené / Zatvoriť</button>
                 </div>
             </div>
         </div>
@@ -158,11 +183,12 @@
                     <table class="w-full text-left border-collapse">
                         <thead>
                             <tr class="bg-gray-100 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300">
+                                <th class="p-3">Zákazník</th>
                                 <th class="p-3">Produkt</th>
                                 <th class="p-3">Cena</th>
                                 <th class="p-3">Šifrovaný Kód</th>
                                 <th class="p-3">Dátum / Expirácia</th>
-                                <th class="p-3">Akcia</th>
+                                <th class="p-3">Akcie</th>
                             </tr>
                         </thead>
                         <tbody id="orders-table-body" class="divide-y divide-gray-200 dark:divide-gray-800"></tbody>
@@ -196,13 +222,14 @@
 
     <script>
         // --- KONFIGURÁCIA ---
-        const DEV_PASSWORD = "5332452"; 
+        const DEV_PASSWORD = "1234"; 
         const JSONBIN_API_KEY = "$2a$10$xxsGTTRIxu44LAHbyjrkDu7zK7We7833GxcorasZRhmCf8ts6a.Iq";
         const BIN_PRODUCTS_ID = "6abfd8e5ac6210605a0d039f";
         const BIN_ORDERS_ID = "6abfd906ffd5d1605346a897";
         const DEFAULT_IMAGE = "https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?w=500&auto=format&fit=crop&q=60";
 
         let isAdminUnlocked = false;
+        let selectedProductIdForPurchase = null;
 
         // --- DARK / LIGHT MODE REŽIM ---
         function initTheme() {
@@ -246,7 +273,6 @@
                 reader.onload = (e) => {
                     const img = new Image();
                     img.onload = () => {
-                        // Zmenšenie veľkosti pre šetrenie miesta v cloude
                         const canvas = document.createElement('canvas');
                         const maxDimension = 600;
                         let width = img.width;
@@ -269,7 +295,6 @@
                         const ctx = canvas.getContext('2d');
                         ctx.drawImage(img, 0, 0, width, height);
 
-                        // Kompresia na JPEG (0.75 kvalita)
                         resolve(canvas.toDataURL('image/jpeg', 0.75));
                     };
                     img.src = e.target.result;
@@ -505,15 +530,55 @@
                         </div>
                     </div>
                     <div class="p-5 pt-0">
-                        <button onclick="buyProduct('${p.id}')" class="w-full bg-indigo-600 text-white py-2 rounded hover:bg-indigo-700 font-bold transition-colors">Kúpiť / Rezervovať</button>
+                        <button onclick="promptPurchase('${p.id}')" class="w-full bg-indigo-600 text-white py-2 rounded hover:bg-indigo-700 font-bold transition-colors">Kúpiť / Rezervovať</button>
                     </div>
                 `;
                 container.appendChild(card);
             });
         }
 
+        // --- POTVRDENIE A ZADANIE MENA PRED NÁKUPOM ---
+        async function promptPurchase(productId) {
+            const products = await getProducts();
+            const product = products.find(p => p.id === productId);
+            if (!product) return;
+
+            if (product.stock <= 0) {
+                alert("Tento produkt je bohužiaľ vypredaný!");
+                await renderShop();
+                return;
+            }
+
+            selectedProductIdForPurchase = productId;
+            document.getElementById('confirm-product-title').innerText = product.title;
+            document.getElementById('customer-name-input').value = '';
+            document.getElementById('confirm-modal').classList.remove('hidden');
+            document.getElementById('customer-name-input').focus();
+        }
+
+        function closeConfirmModal() {
+            document.getElementById('confirm-modal').classList.add('hidden');
+            selectedProductIdForPurchase = null;
+        }
+
+        async function handleConfirmReservation(e) {
+            e.preventDefault();
+            const customerName = document.getElementById('customer-name-input').value.trim();
+            if (!customerName || !selectedProductIdForPurchase) return;
+
+            const btn = document.getElementById('btn-confirm-submit');
+            btn.disabled = true;
+            btn.innerText = "Spracovávam...";
+
+            await buyProduct(selectedProductIdForPurchase, customerName);
+
+            btn.disabled = false;
+            btn.innerText = "Potvrdiť";
+            closeConfirmModal();
+        }
+
         // --- NÁKUP PRODUKTU A GENEREOVANIE QR KÓDU ---
-        async function buyProduct(productId) {
+        async function buyProduct(productId, customerName) {
             let products = await getProducts();
             const productIndex = products.findIndex(p => p.id === productId);
             if (productIndex === -1) return;
@@ -533,6 +598,7 @@
             const newOrder = {
                 id: orderId,
                 productId: product.id,
+                customerName: customerName,
                 title: product.title,
                 price: product.price,
                 type: product.type,
@@ -548,21 +614,17 @@
             // 2. Odpočítanie z počtu kusov
             product.stock -= 1;
 
-            if (product.type === 'once') {
-                if (product.stock <= 0) {
-                    products.splice(productIndex, 1);
-                }
-            } else if (product.type === 'monthly') {
-                if (product.stock <= 0) {
-                    const restockDays = product.restockDays || 7;
-                    product.nextRestockDate = new Date(Date.now() + restockDays * 24 * 60 * 60 * 1000).toISOString();
-                }
+            if (product.type === 'monthly' && product.stock <= 0) {
+                const restockDays = product.restockDays || 7;
+                product.nextRestockDate = new Date(Date.now() + restockDays * 24 * 60 * 60 * 1000).toISOString();
             }
 
             await saveProducts(products);
 
             // 3. Zobrazenie QR Kódu
+            document.getElementById('order-customer-display').innerText = `Meno: ${customerName}`;
             document.getElementById('order-code-display').innerText = code;
+            
             const qrContainer = document.getElementById('qrcode');
             qrContainer.innerHTML = '';
             new QRCode(qrContainer, {
@@ -590,9 +652,7 @@
             const fileInput = document.getElementById('p-file');
             const file = fileInput.files[0];
 
-            // Prevod obrázka
             const imageUrl = await processImageFile(file);
-
             const price = parseFloat(document.getElementById('p-price').value);
             const type = document.getElementById('p-type').value;
 
@@ -641,18 +701,20 @@
             tbodyOrders.innerHTML = '';
 
             if (orders.length === 0) {
-                tbodyOrders.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-gray-500 dark:text-gray-400">Žiadne aktívne objednávky.</td></tr>`;
+                tbodyOrders.innerHTML = `<tr><td colspan="6" class="p-4 text-center text-gray-500 dark:text-gray-400">Žiadne aktívne objednávky.</td></tr>`;
             } else {
                 orders.forEach(o => {
                     const tr = document.createElement('tr');
                     tr.className = 'hover:bg-gray-50 dark:hover:bg-gray-800/50';
                     tr.innerHTML = `
-                        <td class="p-3 font-semibold text-gray-900 dark:text-white">${o.title}</td>
+                        <td class="p-3 font-bold text-gray-900 dark:text-white">${o.customerName || 'Neznámy'}</td>
+                        <td class="p-3 text-gray-800 dark:text-gray-200 font-semibold">${o.title}</td>
                         <td class="p-3 text-gray-700 dark:text-gray-300">${o.price.toFixed(2)} €</td>
                         <td class="p-3 font-mono text-xs text-indigo-600 dark:text-indigo-400 font-bold">${o.code}</td>
                         <td class="p-3 text-sm text-gray-500 dark:text-gray-400">${o.type === 'monthly' ? 'Obnovenie: ' + new Date(o.nextBillingDate).toLocaleDateString() : 'Jednorazovo'}</td>
-                        <td class="p-3">
-                            <button onclick="deleteOrder('${o.code}')" class="bg-red-600 text-white px-3 py-1 rounded text-xs hover:bg-red-700 font-semibold">Zmazať / Využité</button>
+                        <td class="p-3 flex gap-1">
+                            <button onclick="refundOrder('${o.code}')" class="bg-amber-600 text-white px-2 py-1 rounded text-xs hover:bg-amber-700 font-semibold" title="Zrušiť a vrátiť 1ks späť na sklad">↩️️ Vrátiť na sklad</button>
+                            <button onclick="deleteOrder('${o.code}')" class="bg-red-600 text-white px-2 py-1 rounded text-xs hover:bg-red-700 font-semibold" title="Iba zmazať bez vrátenia kusu">🗑️ Zmazať</button>
                         </td>
                     `;
                     tbodyOrders.appendChild(tr);
@@ -697,6 +759,36 @@
             }
         }
 
+        // --- VRÁTENIE OBJEDNÁVKY / CHYBNÝ NÁKUP ---
+        async function refundOrder(code) {
+            let orders = await getOrders();
+            const orderIndex = orders.findIndex(o => o.code === code);
+            if (orderIndex === -1) return;
+
+            const order = orders[orderIndex];
+
+            // Vrátenie kusu späť na sklad
+            let products = await getProducts();
+            const product = products.find(p => p.id === order.productId);
+            if (product) {
+                product.stock += 1;
+                // Ak sa vráti produkt, zrušíme dátum restocku keďže už nie je vypredaný
+                if (product.stock > 0) {
+                    product.nextRestockDate = null;
+                }
+                await saveProducts(products);
+            }
+
+            // Vymazanie objednávky
+            orders.splice(orderIndex, 1);
+            await saveOrders(orders);
+
+            alert(`Objednávka pre zákazníka "${order.customerName}" bola zrušená a 1ks bol vrátený späť na sklad.`);
+
+            await renderAdmin();
+            await renderShop();
+        }
+
         async function handleVerifyCode() {
             const inputCode = document.getElementById('verify-input').value.trim();
             const resultDiv = document.getElementById('verify-result');
@@ -712,7 +804,7 @@
                 await saveOrders(orders);
 
                 resultDiv.className = "text-sm font-semibold mt-2 text-green-600 dark:text-green-400";
-                resultDiv.innerText = `✅ Kód bol Platný! Objednávka pre "${found.title}" (${found.price} €) bola vymazaná.`;
+                resultDiv.innerText = `✅ Kód bol Platný! Objednávka pre zákazníka "${found.customerName}" (${found.title}) bola vybavená a vymazaná.`;
                 document.getElementById('verify-input').value = '';
                 await renderAdmin();
             } else {
